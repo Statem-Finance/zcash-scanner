@@ -1,0 +1,55 @@
+[package]
+name = "zcash-scanner"
+version = "0.1.0"
+edition = "2021"
+description = "Internal Zcash shielded-scanning microservice for Statem. Trial-decrypts notes for a UFVK over a height range and matches challenge spends. Stateless; UFVK held in memory for one request only."
+license = "MIT"
+
+# NOTE: librustzcash crate versions move quickly and their trial-decryption /
+# scanning APIs are version-sensitive. The versions below are a starting point for
+# a recent toolchain — pin and verify against the workspace you build with
+# (`cargo update` + the zcash_client_backend changelog). This project was
+# scaffolded without a local Rust toolchain; it has not been compiled here.
+
+[dependencies]
+# HTTP service (internal-only; never publicly exposed — see README).
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "timeout"] }
+
+# Serialization for the JSON request/response envelopes.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# lightwalletd / Zaino gRPC client. Must match the tonic the librustzcash HEAD's
+# `lightwalletd-tonic` feature uses (0.14 + tonic-prost), or the generated client
+# won't unify with our Channel.
+tonic = { version = "0.14", features = ["transport", "tls-ring", "tls-native-roots"] }
+prost = "0.14"
+
+# Zcash crates — pinned to the librustzcash git repo because the current crates.io
+# releases are uninstallable: orchard 0.10.x is fully yanked but zcash_primitives
+# 0.21 / zcash_client_backend 0.16 still pin ^0.10. The repo HEAD uses orchard 0.14.
+zcash_protocol = { git = "https://github.com/zcash/librustzcash" }
+zcash_keys = { git = "https://github.com/zcash/librustzcash", features = ["sapling", "orchard"] }
+zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
+zcash_client_backend = { git = "https://github.com/zcash/librustzcash", features = ["lightwalletd-tonic", "orchard"] }
+
+# Utilities.
+anyhow = "1"
+thiserror = "2"
+hex = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+secrecy = "0.10"      # wrap the UFVK so it is zeroized on drop
+subtle = "2"          # constant-time compare for the shared-secret auth
+dotenvy = "0.15.7"
+
+# The lightwalletd gRPC client + compact-block proto types come pre-generated from
+# zcash_client_backend::proto (the `lightwalletd-tonic` feature), so we don't vendor
+# .proto files or a build.rs of our own.
+
+[profile.release]
+opt-level = 3
+lto = true
