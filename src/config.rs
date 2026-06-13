@@ -56,3 +56,54 @@ fn opt(key: &str, default: &str) -> String {
         _ => default.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Each test uses a UNIQUE env key so the global-env mutation can't race other
+    // tests running in parallel. (edition 2021 → set_var/remove_var are safe.)
+
+    #[test]
+    fn opt_returns_default_when_unset() {
+        let key = "ZS_TEST_OPT_UNSET";
+        env::remove_var(key);
+        assert_eq!(opt(key, "fallback"), "fallback");
+    }
+
+    #[test]
+    fn opt_treats_blank_as_unset() {
+        // A `KEY=` line in .env must NOT override with an empty string — this is the
+        // exact bug that produced an "invalid socket address" at startup.
+        let key = "ZS_TEST_OPT_BLANK";
+        env::set_var(key, "   ");
+        assert_eq!(opt(key, "0.0.0.0:8080"), "0.0.0.0:8080");
+        env::remove_var(key);
+    }
+
+    #[test]
+    fn opt_uses_value_and_trims() {
+        let key = "ZS_TEST_OPT_SET";
+        env::set_var(key, "  https://zec.rocks:443  ");
+        assert_eq!(opt(key, "default"), "https://zec.rocks:443");
+        env::remove_var(key);
+    }
+
+    #[test]
+    fn req_errors_when_unset_or_blank() {
+        let key = "ZS_TEST_REQ_MISSING";
+        env::remove_var(key);
+        assert!(req(key).is_err());
+        env::set_var(key, "");
+        assert!(req(key).is_err());
+        env::remove_var(key);
+    }
+
+    #[test]
+    fn req_ok_when_set() {
+        let key = "ZS_TEST_REQ_SET";
+        env::set_var(key, " secret ");
+        assert_eq!(req(key).unwrap(), "secret");
+        env::remove_var(key);
+    }
+}

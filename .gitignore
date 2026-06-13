@@ -1,4 +1,6 @@
 /target
 **/*.rs.bk
-Cargo.lock
 .env
+
+# Cargo.lock IS committed: this is a binary, and the librustzcash deps are git
+# pinned, so the lock keeps clones + CI reproducible. (Do not re-add it here.)

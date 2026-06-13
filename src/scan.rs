@@ -73,7 +73,10 @@ async fn seed_metadata(
     height: u64,
 ) -> Result<BlockMetadata, ScanError> {
     let ts = lightwalletd::tree_state(client, height).await?;
-    let chain_state = ts.to_chain_state().map_err(|e| { tracing::error!("to_chain_state error: {e:?}"); ScanError::Upstream })?;
+    let chain_state = ts.to_chain_state().map_err(|e| {
+        tracing::error!("to_chain_state error: {e:?}");
+        ScanError::Upstream
+    })?;
     let sapling_size = chain_state.final_sapling_tree().tree_size() as u32;
     let orchard_size = chain_state.final_orchard_tree().tree_size() as u32;
     Ok(BlockMetadata::from_parts(
@@ -111,12 +114,19 @@ pub async fn scan_range(
     let tip = lightwalletd::latest_height(&mut client).await?;
     let to = to.unwrap_or(tip).min(tip);
     if from > to {
-        return Ok(ScanOutput { received: vec![], spent: vec![], scanned_to_height: to });
+        return Ok(ScanOutput {
+            received: vec![],
+            spent: vec![],
+            scanned_to_height: to,
+        });
     }
     // Guard against an infeasible scan (e.g. birthday=0 → genesis→tip = millions of
     // blocks). Applies to a to-tip scan, which the HTTP handler can't pre-check.
     if to - from > cfg.max_scan_blocks {
-        tracing::error!("scan range {from}..{to} exceeds max_scan_blocks {}", cfg.max_scan_blocks);
+        tracing::error!(
+            "scan range {from}..{to} exceeds max_scan_blocks {}",
+            cfg.max_scan_blocks
+        );
         return Err(ScanError::BadRequest(format!(
             "scan range too large ({} blocks; max {}). Use a more recent birthday height.",
             to - from,
@@ -130,7 +140,10 @@ pub async fn scan_range(
         None
     };
 
-    tracing::info!("scan: range {from}..={to} (tip={tip}), {} blocks", to - from + 1);
+    tracing::info!(
+        "scan: range {from}..={to} (tip={tip}), {} blocks",
+        to - from + 1
+    );
 
     let mut received: Vec<Note> = Vec::new();
     let mut spent: Vec<Note> = Vec::new();
@@ -146,7 +159,10 @@ pub async fn scan_range(
     let mut stream = lightwalletd::block_range(&mut client, from, to).await?;
     let mut scanned_to = from.saturating_sub(1);
 
-    while let Some(block) = stream.message().await.map_err(|e| { tracing::error!("block stream error: {e:?}"); ScanError::Upstream })? {
+    while let Some(block) = stream.message().await.map_err(|e| {
+        tracing::error!("block stream error: {e:?}");
+        ScanError::Upstream
+    })? {
         let height = block.height;
         let time = block.time as u64;
         blocks_seen += 1;
@@ -156,20 +172,35 @@ pub async fn scan_range(
         }
 
         let scanned = scan_block(&network, block.clone(), &keys, &nullifiers, prior.as_ref())
-            .map_err(|e| { tracing::error!("scan_block error at height {height}: {e:?}"); ScanError::Internal })?;
+            .map_err(|e| {
+                tracing::error!("scan_block error at height {height}: {e:?}");
+                ScanError::Internal
+            })?;
 
         for tx in scanned.transactions() {
             let txid = hex::encode(tx.txid().as_ref());
             for out in tx.sapling_outputs() {
                 let value = out.note().value().inner();
-                received.push(Note { value_zat: value, height, time, txid: txid.clone(), pool: "sapling".into() });
+                received.push(Note {
+                    value_zat: value,
+                    height,
+                    time,
+                    txid: txid.clone(),
+                    pool: "sapling".into(),
+                });
                 if let Some(nf) = out.nf() {
                     received_nf.insert(hex::encode(nf.0), value);
                 }
             }
             for out in tx.orchard_outputs() {
                 let value = out.note().value().inner();
-                received.push(Note { value_zat: value, height, time, txid: txid.clone(), pool: "orchard".into() });
+                received.push(Note {
+                    value_zat: value,
+                    height,
+                    time,
+                    txid: txid.clone(),
+                    pool: "orchard".into(),
+                });
                 if let Some(nf) = out.nf() {
                     received_nf.insert(hex::encode(nf.to_bytes()), value);
                 }
@@ -181,12 +212,24 @@ pub async fn scan_range(
             let txid = hex::encode(&ctx.txid);
             for s in &ctx.spends {
                 if let Some(value) = received_nf.get(&hex::encode(&s.nf)) {
-                    spent.push(Note { value_zat: *value, height, time, txid: txid.clone(), pool: "sapling".into() });
+                    spent.push(Note {
+                        value_zat: *value,
+                        height,
+                        time,
+                        txid: txid.clone(),
+                        pool: "sapling".into(),
+                    });
                 }
             }
             for a in &ctx.actions {
                 if let Some(value) = received_nf.get(&hex::encode(&a.nullifier)) {
-                    spent.push(Note { value_zat: *value, height, time, txid: txid.clone(), pool: "orchard".into() });
+                    spent.push(Note {
+                        value_zat: *value,
+                        height,
+                        time,
+                        txid: txid.clone(),
+                        pool: "orchard".into(),
+                    });
                 }
             }
         }
@@ -206,7 +249,11 @@ pub async fn scan_range(
         total_received.saturating_sub(total_spent)
     );
 
-    Ok(ScanOutput { received, spent, scanned_to_height: scanned_to })
+    Ok(ScanOutput {
+        received,
+        spent,
+        scanned_to_height: scanned_to,
+    })
 }
 
 /// Find a wallet spend carrying `expected_memo` within the window.
@@ -224,10 +271,18 @@ pub async fn verify_spend(
     );
     let mut client = lightwalletd::connect(&cfg.lightwalletd_url).await?;
     for s in &scan.spent {
-        let raw = lightwalletd::get_transaction(&mut client, hex::decode(&s.txid).unwrap_or_default()).await?;
+        let raw =
+            lightwalletd::get_transaction(&mut client, hex::decode(&s.txid).unwrap_or_default())
+                .await?;
         if memo_matches(cfg, ufvk, &raw, s.height, expected_memo) {
-            tracing::info!("verify_spend: memo matched in spend tx at height {}", s.height);
-            return Ok(Some(SpendMatch { txid: s.txid.clone(), height: s.height }));
+            tracing::info!(
+                "verify_spend: memo matched in spend tx at height {}",
+                s.height
+            );
+            return Ok(Some(SpendMatch {
+                txid: s.txid.clone(),
+                height: s.height,
+            }));
         }
     }
     tracing::info!("verify_spend: no spend carried the challenge memo (→ visibility_only)");
@@ -275,6 +330,68 @@ fn memo_matches(
         matches!(Memo::try_from(memo_bytes), Ok(Memo::Text(t)) if t.trim() == want)
     };
 
-    decrypted.sapling_outputs().iter().any(|o| is_match(o.memo()))
-        || decrypted.orchard_outputs().iter().any(|o| is_match(o.memo()))
+    decrypted
+        .sapling_outputs()
+        .iter()
+        .any(|o| is_match(o.memo()))
+        || decrypted
+            .orchard_outputs()
+            .iter()
+            .any(|o| is_match(o.memo()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_cfg(network: &str) -> Config {
+        Config {
+            bind_addr: "0.0.0.0:0".into(),
+            lightwalletd_url: "https://example:443".into(),
+            shared_secret: SecretString::from("test-secret".to_string()),
+            network: network.to_string(),
+            max_scan_blocks: 100,
+        }
+    }
+
+    #[test]
+    fn network_for_maps_test_and_main() {
+        assert!(matches!(
+            network_for(&test_cfg("test")),
+            Network::TestNetwork
+        ));
+        assert!(matches!(
+            network_for(&test_cfg("main")),
+            Network::MainNetwork
+        ));
+        // Anything unrecognised falls back to mainnet — a safer default than panicking.
+        assert!(matches!(
+            network_for(&test_cfg("wat")),
+            Network::MainNetwork
+        ));
+    }
+
+    #[test]
+    fn parse_ufvk_rejects_garbage() {
+        let cfg = test_cfg("main");
+        assert!(parse_ufvk(&cfg, &SecretString::from("not-a-ufvk".to_string())).is_err());
+        assert!(parse_ufvk(&cfg, &SecretString::from(String::new())).is_err());
+    }
+
+    #[test]
+    fn memo_matches_is_false_on_invalid_input() {
+        // The core security guarantee: a bad UFVK or an unparseable transaction can
+        // NEVER yield a true "ownership verified". It must return false — and never
+        // panic — so an unverifiable input degrades to visibility_only, not control.
+        let cfg = test_cfg("main");
+        let bad_ufvk = SecretString::from("not-a-ufvk".to_string());
+        assert!(!memo_matches(&cfg, &bad_ufvk, &[], 1_000_000, "memo"));
+        assert!(!memo_matches(
+            &cfg,
+            &bad_ufvk,
+            &[0x00, 0x01, 0x02],
+            1_000_000,
+            "memo"
+        ));
+    }
 }

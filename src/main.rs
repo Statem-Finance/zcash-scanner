@@ -103,7 +103,9 @@ async fn scan_handler(
             return Err(ScanError::BadRequest("to_height < from_height".into()));
         }
         if to - req.from_height > st.cfg.max_scan_blocks {
-            return Err(ScanError::BadRequest("range exceeds max_scan_blocks".into()));
+            return Err(ScanError::BadRequest(
+                "range exceeds max_scan_blocks".into(),
+            ));
         }
     }
     // Wrap immediately so the raw key can't accidentally be logged/returned.
@@ -138,7 +140,10 @@ async fn verify_spend_handler(
     )
     .await?;
     Ok(Json(VerifySpendResponse {
-        matched: matched.map(|m| SpendMatch { txid: m.txid, height: m.height }),
+        matched: matched.map(|m| SpendMatch {
+            txid: m.txid,
+            height: m.height,
+        }),
     }))
 }
 
@@ -160,8 +165,8 @@ async fn auth(
         .unwrap_or("");
     let expected = st.cfg.shared_secret.expose_secret();
     // Constant-time compare; equal-length guard avoids leaking length via timing.
-    let ok = presented.len() == expected.len()
-        && presented.as_bytes().ct_eq(expected.as_bytes()).into();
+    let ok =
+        presented.len() == expected.len() && presented.as_bytes().ct_eq(expected.as_bytes()).into();
     if !ok {
         return Err(ScanError::Unauthorized);
     }

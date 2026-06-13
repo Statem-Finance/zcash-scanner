@@ -1,0 +1,52 @@
+name: CI
+
+# Regression gate for the Zcash scanner. Runs on every push to main and on PRs.
+# The librustzcash dependencies are git-pinned to an explicit rev and Cargo.lock is
+# committed, so this build is reproducible — a green run means the same commit will
+# compile + pass for anyone who clones it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Treat warnings as errors everywhere (build + clippy), so a regression that only
+  # produces a warning still fails the gate.
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  check:
+    name: fmt · clippy · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # zcash_client_backend's lightwalletd-tonic feature ships pre-generated proto,
+      # but install protoc defensively so a future build.rs change can't break CI.
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install Rust toolchain (stable + rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Caches the cargo registry, git checkouts (the librustzcash rev), and target/
+      # so the heavy first compile is paid once, not every run.
+      - name: Cache cargo + build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --all --locked
+
+      - name: Build (release)
+        run: cargo build --release --locked

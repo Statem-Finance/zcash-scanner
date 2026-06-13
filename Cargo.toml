@@ -31,10 +31,12 @@ prost = "0.14"
 # Zcash crates — pinned to the librustzcash git repo because the current crates.io
 # releases are uninstallable: orchard 0.10.x is fully yanked but zcash_primitives
 # 0.21 / zcash_client_backend 0.16 still pin ^0.10. The repo HEAD uses orchard 0.14.
-zcash_protocol = { git = "https://github.com/zcash/librustzcash" }
-zcash_keys = { git = "https://github.com/zcash/librustzcash", features = ["sapling", "orchard"] }
-zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
-zcash_client_backend = { git = "https://github.com/zcash/librustzcash", features = ["lightwalletd-tonic", "orchard"] }
+# Pinned to an explicit rev (NOT moving HEAD) so clones + CI build reproducibly;
+# Cargo.lock is committed for the same reason. Bump deliberately when upgrading.
+zcash_protocol = { git = "https://github.com/zcash/librustzcash", rev = "32fa8e25684693605762febde92920c7d795634b" }
+zcash_keys = { git = "https://github.com/zcash/librustzcash", rev = "32fa8e25684693605762febde92920c7d795634b", features = ["sapling", "orchard"] }
+zcash_primitives = { git = "https://github.com/zcash/librustzcash", rev = "32fa8e25684693605762febde92920c7d795634b" }
+zcash_client_backend = { git = "https://github.com/zcash/librustzcash", rev = "32fa8e25684693605762febde92920c7d795634b", features = ["lightwalletd-tonic", "orchard"] }
 
 # Utilities.
 anyhow = "1"

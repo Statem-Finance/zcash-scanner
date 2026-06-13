@@ -9,10 +9,10 @@
 
 use crate::error::ScanError;
 use tonic::transport::{Channel, ClientTlsConfig};
+use zcash_client_backend::proto::compact_formats::CompactBlock;
 use zcash_client_backend::proto::service::{
     compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec, TxFilter,
 };
-use zcash_client_backend::proto::compact_formats::CompactBlock;
 
 pub type Client = CompactTxStreamerClient<Channel>;
 
@@ -53,7 +53,9 @@ pub async fn connect(url: &str) -> Result<Client, ScanError> {
 /// Current chain tip height.
 pub async fn latest_height(client: &mut Client) -> Result<u64, ScanError> {
     let resp = client
-        .get_latest_block(ChainSpec {}).await.map_err(upstream("get_latest_block"))?;
+        .get_latest_block(ChainSpec {})
+        .await
+        .map_err(upstream("get_latest_block"))?;
     Ok(resp.into_inner().height)
 }
 
@@ -65,7 +67,12 @@ pub async fn tree_state(
     height: u64,
 ) -> Result<zcash_client_backend::proto::service::TreeState, ScanError> {
     let resp = client
-        .get_tree_state(BlockId { height, hash: vec![] }).await.map_err(upstream("get_tree_state"))?;
+        .get_tree_state(BlockId {
+            height,
+            hash: vec![],
+        })
+        .await
+        .map_err(upstream("get_tree_state"))?;
     Ok(resp.into_inner())
 }
 
@@ -76,22 +83,33 @@ pub async fn block_range(
     end: u64,
 ) -> Result<tonic::Streaming<CompactBlock>, ScanError> {
     let range = BlockRange {
-        start: Some(BlockId { height: start, hash: vec![] }),
-        end: Some(BlockId { height: end, hash: vec![] }),
+        start: Some(BlockId {
+            height: start,
+            hash: vec![],
+        }),
+        end: Some(BlockId {
+            height: end,
+            hash: vec![],
+        }),
         pool_types: vec![], // all pools
     };
     let resp = client
-        .get_block_range(range).await.map_err(upstream("get_block_range"))?;
+        .get_block_range(range)
+        .await
+        .map_err(upstream("get_block_range"))?;
     Ok(resp.into_inner())
 }
 
 /// Fetch a full raw transaction by txid (needed to read memos for verify-spend —
 /// compact blocks omit the full ciphertext).
-pub async fn get_transaction(
-    client: &mut Client,
-    txid: Vec<u8>,
-) -> Result<Vec<u8>, ScanError> {
+pub async fn get_transaction(client: &mut Client, txid: Vec<u8>) -> Result<Vec<u8>, ScanError> {
     let resp = client
-        .get_transaction(TxFilter { block: None, index: 0, hash: txid }).await.map_err(upstream("get_transaction"))?;
+        .get_transaction(TxFilter {
+            block: None,
+            index: 0,
+            hash: txid,
+        })
+        .await
+        .map_err(upstream("get_transaction"))?;
     Ok(resp.into_inner().data)
 }
