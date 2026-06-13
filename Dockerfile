@@ -23,8 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=build /app/target/release/zcash-scanner /usr/local/bin/zcash-scanner
 USER scanner
 
-# Internal port. Railway maps this on the PRIVATE network only — never expose
-# this service publicly (see README). Health probe at /healthz.
+# Port handling: the app binds `$PORT` when the platform sets it (Railway, Render,
+# Fly all do — and they route to THAT port, so binding anything else yields a 502
+# "connection dial timeout"). Otherwise it falls back to SCANNER_BIND_ADDR, then
+# 8080. The ENV/EXPOSE below are just defaults for a plain `docker run`. Prefer the
+# platform's PRIVATE network over a public domain (shared-secret auth). Health: /healthz.
 ENV SCANNER_BIND_ADDR=0.0.0.0:8080
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/zcash-scanner"]

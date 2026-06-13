@@ -23,7 +23,7 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Self {
-            bind_addr: opt("SCANNER_BIND_ADDR", "0.0.0.0:8080"),
+            bind_addr: bind_addr(),
             // Public mainnet lightwalletd (Electric Coin Co. / zec.rocks fleet,
             // ~0.99 30-day uptime). Override for testnet with
             // https://testnet.zec.rocks:443 (+ ZCASH_NETWORK=test), or a regional
@@ -38,6 +38,21 @@ impl Config {
                 .unwrap_or(2_000_000),
         })
     }
+}
+
+/// Resolve the listen address. PaaS platforms (Railway, Render, Fly, …) assign the
+/// routed port via `PORT` and dial the container on it — so prefer `PORT` to avoid
+/// the "connection dial timeout" 502 you get when the app binds a different port
+/// than the platform routes to. Falls back to an explicit `SCANNER_BIND_ADDR`
+/// (handy for pinning a port locally), then a sane default.
+fn bind_addr() -> String {
+    if let Ok(port) = env::var("PORT") {
+        let port = port.trim();
+        if !port.is_empty() {
+            return format!("0.0.0.0:{port}");
+        }
+    }
+    opt("SCANNER_BIND_ADDR", "0.0.0.0:8080")
 }
 
 /// Required var — errors if unset OR empty (a blank `.env` line is a misconfig).
@@ -105,5 +120,22 @@ mod tests {
         env::set_var(key, " secret ");
         assert_eq!(req(key).unwrap(), "secret");
         env::remove_var(key);
+    }
+
+    #[test]
+    fn bind_addr_prefers_port_over_scanner_bind_addr() {
+        // No other test reads PORT / SCANNER_BIND_ADDR, so mutating them here is safe.
+        env::remove_var("PORT");
+        env::remove_var("SCANNER_BIND_ADDR");
+        assert_eq!(bind_addr(), "0.0.0.0:8080"); // default
+
+        env::set_var("SCANNER_BIND_ADDR", "0.0.0.0:8091");
+        assert_eq!(bind_addr(), "0.0.0.0:8091"); // explicit local override
+
+        env::set_var("PORT", "3000");
+        assert_eq!(bind_addr(), "0.0.0.0:3000"); // PaaS-assigned port wins
+
+        env::remove_var("PORT");
+        env::remove_var("SCANNER_BIND_ADDR");
     }
 }
